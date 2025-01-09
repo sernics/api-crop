@@ -29,6 +29,8 @@ PEPPER_CONFIG_PATH = os.path.join(BASE_DIR, "models/pepperConfig.json")
 PEPPER_WEIGHTS_PATH = os.path.join(BASE_DIR, "models/pepperModel.weights.h5")
 POTATO_CONFIG_PATH = os.path.join(BASE_DIR, "models/potatoConfig.json")
 POTATO_WEIGHTS_PATH = os.path.join(BASE_DIR, "models/potatoModel.weights.h5")
+TOMATO_CONFIG_PATH = os.path.join(BASE_DIR, "models/tomatoConfig.json")
+TOMATO_WEIGHTS_PATH = os.path.join(BASE_DIR, "models/tomatoModel.weights.h5")
 CLASS_NAMES = ["Pepper", "Potato", "Tomato"]
 
 def load_model(config_path=CONFIG_PATH, weights_path=WEIGHTS_PATH):
@@ -84,6 +86,10 @@ def checkFiles():
         raise FileNotFoundError(f"Configuration file not found: {POTATO_CONFIG_PATH}")
     if not os.path.exists(POTATO_WEIGHTS_PATH):
         raise FileNotFoundError(f"Weights file not found: {POTATO_WEIGHTS_PATH}")
+    if not os.path.exists(TOMATO_CONFIG_PATH):
+        raise FileNotFoundError(f"Configuration file not found: {TOMATO_CONFIG_PATH}")
+    if not os.path.exists(TOMATO_WEIGHTS_PATH):
+        raise FileNotFoundError(f"Weights file not found: {TOMATO_WEIGHTS_PATH}")
 
 def decode_base64_image(base64_string):
     """
@@ -129,6 +135,7 @@ try:
     model = load_model()
     pepper_model = load_model(PEPPER_CONFIG_PATH, PEPPER_WEIGHTS_PATH)
     potato_model = load_model(POTATO_CONFIG_PATH, POTATO_WEIGHTS_PATH)
+    tomato_model = load_model(TOMATO_CONFIG_PATH, TOMATO_WEIGHTS_PATH)
 except Exception as e:
     logger.critical(f"Failed to load model at startup: {str(e)}")
     raise
@@ -168,14 +175,18 @@ def predict():
         healthy = None
         if predicted_class == "Pepper":
             healthy = pepper_model.predict(preprocessed_image)
+            healthy = predict_pepper(healthy)
         elif predicted_class == "Potato":
             healthy = potato_model.predict(preprocessed_image)
-
-        print(healthy)
+            healthy = predict_potato(healthy)
+        elif predicted_class == "Tomato":
+            healthy = tomato_model.predict(preprocessed_image)
+            healthy = predict_tomato(healthy)
 
         return jsonify({
             "status": "success",
             "prediction": predicted_class,
+            "healthy": healthy,
             "confidence": confidence,
             "probabilities": {
                 class_name: float(prob)
@@ -189,6 +200,30 @@ def predict():
         logger.error(f"Prediction error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
+def predict_pepper(probs):
+    predicted_class = np.argmax(probs)
+    if predicted_class == 0:
+        return "El pimiento no está sano"
+    else:
+        return "El pimiento está Sano"
+
+def predict_potato(probs):
+    predicted_class = np.argmax(probs)
+    if predicted_class == 0:
+        return "Tizón temprano de la patata"
+    elif predicted_class == 1:
+        return "La patata está sana"
+    else: 
+        return "Tizón tardío de la patata"
+    
+def predict_tomato(probs):
+    predicted_class = np.argmax(probs)
+    if predicted_class == 0:
+        return "Tizón tardío del tomate"
+    elif predicted_class == 1:
+        return "Tomate sano"
+    else: 
+        return "Tizón temprano del tomate"
 
 @app.route("/", methods=["GET"])
 def index():
@@ -209,5 +244,5 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001) # Cambiar puerto 5000
+    app.run(debug=True, port=5000) # Cambiar puerto 5000
 
