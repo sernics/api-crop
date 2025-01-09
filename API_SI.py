@@ -23,25 +23,22 @@ CORS(app)
 
 # Base directory and file paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-WEIGHTS_PATH = os.path.join(BASE_DIR, "model.weights.h5")
+CONFIG_PATH = os.path.join(BASE_DIR, "models/selectConfig.json")
+WEIGHTS_PATH = os.path.join(BASE_DIR, "models/selectModel.weights.h5")
+PEPPER_CONFIG_PATH = os.path.join(BASE_DIR, "models/pepperConfig.json")
+PEPPER_WEIGHTS_PATH = os.path.join(BASE_DIR, "models/pepperModel.weights.h5")
+POTATO_CONFIG_PATH = os.path.join(BASE_DIR, "models/potatoConfig.json")
+POTATO_WEIGHTS_PATH = os.path.join(BASE_DIR, "models/potatoModel.weights.h5")
 CLASS_NAMES = ["Pepper", "Potato", "Tomato"]
 
-
-def load_model():
+def load_model(config_path=CONFIG_PATH, weights_path=WEIGHTS_PATH):
     """
     Load and configure the model from JSON config and weights files.
     Returns the configured model or raises an exception if there's an error.
     """
     try:
-        # Check if files exist
-        if not os.path.exists(CONFIG_PATH):
-            raise FileNotFoundError(f"Configuration file not found: {CONFIG_PATH}")
-        if not os.path.exists(WEIGHTS_PATH):
-            raise FileNotFoundError(f"Weights file not found: {WEIGHTS_PATH}")
-
         # Load model architecture
-        with open(CONFIG_PATH, "r") as config_file:
+        with open(config_path, "r") as config_file:
             model_config = json.load(config_file)
 
         # Extract the model architecture configuration
@@ -62,7 +59,7 @@ def load_model():
         # Load weights
         try:
             model = Sequential.from_config(model_architecture)
-            model.load_weights(WEIGHTS_PATH)
+            model.load_weights(weights_path)
             logger.info("Model loaded successfully")
             return model
         except Exception as e:
@@ -73,6 +70,20 @@ def load_model():
         logger.error(f"Error loading model: {str(e)}")
         raise
 
+def checkFiles():
+    # Check if files exist
+    if not os.path.exists(CONFIG_PATH):
+        raise FileNotFoundError(f"Configuration file not found: {CONFIG_PATH}")
+    if not os.path.exists(WEIGHTS_PATH):
+        raise FileNotFoundError(f"Weights file not found: {WEIGHTS_PATH}")
+    if not os.path.exists(PEPPER_CONFIG_PATH):
+        raise FileNotFoundError(f"Configuration file not found: {PEPPER_CONFIG_PATH}")
+    if not os.path.exists(PEPPER_WEIGHTS_PATH):
+        raise FileNotFoundError(f"Weights file not found: {PEPPER_WEIGHTS_PATH}")
+    if not os.path.exists(POTATO_CONFIG_PATH):
+        raise FileNotFoundError(f"Configuration file not found: {POTATO_CONFIG_PATH}")
+    if not os.path.exists(POTATO_WEIGHTS_PATH):
+        raise FileNotFoundError(f"Weights file not found: {POTATO_WEIGHTS_PATH}")
 
 def decode_base64_image(base64_string):
     """
@@ -113,7 +124,11 @@ def preprocess_image(image):
 
 # Load model at startup
 try:
+    # Check if files exist
+    checkFiles()
     model = load_model()
+    pepper_model = load_model(PEPPER_CONFIG_PATH, PEPPER_WEIGHTS_PATH)
+    potato_model = load_model(POTATO_CONFIG_PATH, POTATO_WEIGHTS_PATH)
 except Exception as e:
     logger.critical(f"Failed to load model at startup: {str(e)}")
     raise
@@ -149,6 +164,14 @@ def predict():
         prediction = model.predict(preprocessed_image)
         predicted_class = CLASS_NAMES[np.argmax(prediction)]
         confidence = float(np.max(prediction))
+        print(predicted_class)
+        healthy = None
+        if predicted_class == "Pepper":
+            healthy = pepper_model.predict(preprocessed_image)
+        elif predicted_class == "Potato":
+            healthy = potato_model.predict(preprocessed_image)
+
+        print(healthy)
 
         return jsonify({
             "status": "success",
@@ -186,5 +209,5 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001) # Cambiar puerto 5000
 
