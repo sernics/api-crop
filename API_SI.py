@@ -1,0 +1,190 @@
+# app.py
+from flask import Flask, request, jsonify
+from tensorflow.keras.models import model_from_json, Sequential, load_model
+from tensorflow.keras.preprocessing.image import img_to_array
+from flask_cors import CORS
+import numpy as np
+from PIL import Image
+import os
+import json
+import base64
+import io
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Suppress TensorFlow logging
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+app = Flask(__name__)
+CORS(app)
+
+# Base directory and file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+WEIGHTS_PATH = os.path.join(BASE_DIR, "model.weights.h5")
+CLASS_NAMES = ["Pepper", "Potato", "Tomato"]
+
+
+def load_model():
+    """
+    Load and configure the model from JSON config and weights files.
+    Returns the configured model or raises an exception if there's an error.
+    """
+    try:
+        # Check if files exist
+        if not os.path.exists(CONFIG_PATH):
+            raise FileNotFoundError(f"Configuration file not found: {CONFIG_PATH}")
+        if not os.path.exists(WEIGHTS_PATH):
+            raise FileNotFoundError(f"Weights file not found: {WEIGHTS_PATH}")
+
+        # Load model architecture
+        with open(CONFIG_PATH, "r") as config_file:
+            model_config = json.load(config_file)
+
+        # Extract the model architecture configuration
+        if isinstance(model_config, dict) and "config" in model_config:
+            model_architecture = model_config["config"]
+        else:
+            raise ValueError("Invalid model configuration format")
+
+        # Create model from JSON string
+        try:
+            from tensorflow.keras.models import model_from_config
+            model = model_from_config(model_architecture)
+        except:
+            # Alternative method if the first fails
+            json_config = json.dumps(model_architecture)
+            model = model_from_json(json_config)
+
+        # Load weights
+        try:
+            model = Sequential.from_config(model_architecture)
+            model.load_weights(WEIGHTS_PATH)
+            logger.info("Model loaded successfully")
+            return model
+        except Exception as e:
+            logger.error(f"Error loading weights: {str(e)}")
+            raise
+
+    except Exception as e:
+        logger.error(f"Error loading model: {str(e)}")
+        raise
+
+
+def decode_base64_image(base64_string):
+    """
+    Decode a base64 string into a PIL Image.
+    """
+    try:
+        # Remove header if present
+        if "base64," in base64_string:
+            base64_string = base64_string.split("base64,")[1]
+
+        # Decode base64 string
+        image_bytes = base64.b64decode(base64_string)
+        image = Image.open(io.BytesIO(image_bytes))
+        return image
+    except Exception as e:
+        logger.error(f"Error decoding base64 image: {str(e)}")
+        raise ValueError("Invalid base64 image format")
+
+
+def preprocess_image(image):
+    """
+    Preprocess a PIL Image for model prediction.
+    """
+    try:
+        # Convert to RGB if needed
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        # Resize and preprocess
+        image = image.resize((256, 256))
+        image_array = img_to_array(image)
+        image_array = image_array / 255.0
+        return np.expand_dims(image_array, axis=0)
+    except Exception as e:
+        logger.error(f"Error preprocessing image: {str(e)}")
+        raise ValueError("Error preprocessing image")
+
+
+# Load model at startup
+try:
+    model = load_model()
+except Exception as e:
+    logger.critical(f"Failed to load model at startup: {str(e)}")
+    raise
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    """
+    Handle prediction requests with either file upload or base64 image data.
+    """
+    try: 
+        # Check if the request has JSON data
+        if request.is_json:
+            data = request.get_json()
+            if "image" not in data:
+                return jsonify({"error": "No image data found in JSON"}), 400
+
+            # Process base64 image
+            image = decode_base64_image(data["image"])
+
+        # Check if the request has file data
+        elif "file" in request.files:
+            file = request.files["file"]
+            if not file:
+                return jsonify({"error": "Empty file"}), 400
+            image = Image.open(file.stream)
+
+        else:
+            return jsonify({"error": "No image data found in request"}), 400
+
+        # Preprocess and predict
+        preprocessed_image = preprocess_image(image)
+        prediction = model.predict(preprocessed_image)
+        predicted_class = CLASS_NAMES[np.argmax(prediction)]
+        confidence = float(np.max(prediction))
+
+        return jsonify({
+            "status": "success",
+            "prediction": predicted_class,
+            "confidence": confidence,
+            "probabilities": {
+                class_name: float(prob)
+                for class_name, prob in zip(CLASS_NAMES, prediction[0])
+            },
+        })
+
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        logger.error(f"Prediction error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/", methods=["GET"])
+def index():
+    """
+    Root endpoint with API information.
+    """
+    return jsonify({
+        "message": "Plant Disease Classification API",
+        "endpoints": {
+            "/predict": {
+                "method": "POST",
+                "accepts": ["multipart/form-data (file)", "application/json (base64 image)"],
+                "returns": "JSON with prediction results"
+            }
+        },
+        "supported_classes": CLASS_NAMES
+    })
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
