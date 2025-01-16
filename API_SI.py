@@ -210,16 +210,16 @@ def predict_pepper(probs):
 def predict_potato(probs):
     predicted_class = np.argmax(probs)
     if predicted_class == 0:
-        return "Tizón temprano de la patata"
+        return "Plaga tardía de la patata"
     elif predicted_class == 1:
         return "La patata está sana"
     else: 
-        return "Tizón tardío de la patata"
+        return "Tizón temprano de la patata"
     
 def predict_tomato(probs):
     predicted_class = np.argmax(probs)
     if predicted_class == 0:
-        return "Tizón tardío del tomate"
+        return "Plaga tardía del tomate"
     elif predicted_class == 1:
         return "Tomate sano"
     else: 
