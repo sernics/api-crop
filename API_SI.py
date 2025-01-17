@@ -203,27 +203,27 @@ def predict():
 def predict_pepper(probs):
     predicted_class = np.argmax(probs)
     if predicted_class == 0:
-        return "El pimiento no está sano"
+        return "The pepper is not healthy"
     else:
-        return "El pimiento está Sano"
+        return "The pepper is healthy"
 
 def predict_potato(probs):
     predicted_class = np.argmax(probs)
     if predicted_class == 0:
-        return "Plaga tardía de la patata"
+        return "Late blight of potato"
     elif predicted_class == 1:
-        return "La patata está sana"
+        return "The potato is healthy"
     else: 
-        return "Tizón temprano de la patata"
+        return "Early blight of potato"
     
 def predict_tomato(probs):
     predicted_class = np.argmax(probs)
     if predicted_class == 0:
-        return "Plaga tardía del tomate"
+        return "Late blight of tomato"
     elif predicted_class == 1:
-        return "Tomate sano"
+        return "The tomato is healthy"
     else: 
-        return "Tizón temprano del tomate"
+        return "Early blight of tomato"
 
 @app.route("/", methods=["GET"])
 def index():
